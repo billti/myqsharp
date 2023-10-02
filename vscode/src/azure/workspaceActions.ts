@@ -46,7 +46,7 @@ export async function getAuthSession(scopes: string[]): Promise<vscode.Authentic
 export function getRandomGuid(): string {
   const id = crypto.getRandomValues(new Uint8Array(16));
   const idChars = Array.from(id)
-    .map((b) => b.toString(16))
+    .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
   return (
