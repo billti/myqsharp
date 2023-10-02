@@ -19,7 +19,48 @@ import {
 export const scopes = {
   armMgmt: "https://management.azure.com/user_impersonation",
   quantum: "https://quantum.microsoft.com/user_impersonation",
+  chatApi: "https://api.quantum.microsoft.com/Chat.ReadWrite"
 };
+
+export async function getAuthSession(scopes: string[]): Promise<vscode.AuthenticationSession> {
+  log.debug("About to getSession for scopes", scopes.join(","));
+  try {
+    let session = await vscode.authentication.getSession("microsoft", scopes, {
+      silent: true,
+    });
+    if (!session) {
+      log.debug("No session with silent request. Trying with createIfNone");
+      session = await vscode.authentication.getSession("microsoft", scopes, {
+        createIfNone: true,
+      });
+    }
+    log.debug("Got session: ", JSON.stringify(session, null, 2));
+    return session;
+  } catch (e) {
+    log.error("Exception occurred in getAuthSession: ", e);
+    throw e;
+  }
+}
+
+// Guid format such as "00000000-1111-2222-3333-444444444444"
+export function getRandomGuid(): string {
+  const id = crypto.getRandomValues(new Uint8Array(16));
+  const idChars = Array.from(id)
+    .map((b) => b.toString(16))
+    .join("");
+
+  return (
+    idChars.substring(0, 8) +
+    "-" +
+    idChars.substring(8, 12) +
+    "-" +
+    idChars.substring(12, 16) +
+    "-" +
+    idChars.substring(16, 20) +
+    "-" +
+    idChars.substring(20, 32)
+  );
+}
 
 export async function queryWorkspaces(): Promise<
   WorkspaceConnection | undefined
@@ -29,19 +70,14 @@ export async function queryWorkspaces(): Promise<
 
   // For the MSA case, you need to query the tenants first and get the underlying AzureAD
   // tenant for the 'guest' MSA. See https://stackoverflow.microsoft.com/a/76246/108570
-  const firstAuth = await vscode.authentication.getSession(
-    "microsoft",
-    [scopes.armMgmt],
-    { createIfNone: true }
-  );
+  const firstAuth = await getAuthSession([scopes.armMgmt]);
+
   if (!firstAuth) {
     log.error("No authentication session returned");
     return;
   }
 
-  log.trace(`Got first token: ${JSON.stringify(firstAuth, null, 2)}`);
   const firstToken = firstAuth.accessToken;
-
   const azureUris = new AzureUris();
 
   const tenants: ResponseTypes.TenantList = await azureRequest(
@@ -78,17 +114,12 @@ export async function queryWorkspaces(): Promise<
   const matchesTenant = tenantAuth.account.id.startsWith(tenantId);
   const accountType = (tenantAuth as any).account?.type || "";
   if (accountType !== "aad" || !matchesTenant) {
-    tenantAuth = await vscode.authentication.getSession(
-      "microsoft",
-      [scopes.armMgmt, `VSCODE_TENANT:${tenantId}`],
-      { createIfNone: true }
-    );
+    tenantAuth = await getAuthSession([scopes.armMgmt, `VSCODE_TENANT:${tenantId}`]);
     if (!tenantAuth) {
       // The user may have cancelled the login
       log.debug("No AAD authentication session returned during 2nd auth");
       return;
     }
-    log.trace(`Got tenant token: ${JSON.stringify(tenantAuth, null, 2)}`);
   }
   const tenantToken = tenantAuth.accessToken;
 
@@ -183,12 +214,7 @@ export async function queryWorkspaces(): Promise<
 }
 
 export async function getTokenForWorkspace(workspace: WorkspaceConnection) {
-  const workspaceAuth = await vscode.authentication.getSession(
-    "microsoft",
-    [scopes.quantum, `VSCODE_TENANT:${workspace.tenantId}`],
-    { createIfNone: true }
-  );
-  log.trace(`Got workspace token: ${JSON.stringify(workspaceAuth, null, 2)}`);
+  const workspaceAuth = await getAuthSession([scopes.quantum, `VSCODE_TENANT:${workspace.tenantId}`]);
   return workspaceAuth.accessToken;
 }
 
@@ -281,23 +307,7 @@ export async function submitJob(
   providerId: string,
   target: string
 ) {
-  // Generate a unique container id of the form "job-<uuid>"
-  const id = crypto.getRandomValues(new Uint8Array(16));
-  const idChars = Array.from(id)
-    .map((b) => b.toString(16))
-    .join("");
-  // Guid format such as "00000000-1111-2222-3333-444444444444"
-  const containerName =
-    idChars.substring(0, 8) +
-    "-" +
-    idChars.substring(8, 12) +
-    "-" +
-    idChars.substring(12, 16) +
-    "-" +
-    idChars.substring(16, 20) +
-    "-" +
-    idChars.substring(20, 32);
-
+  const containerName = getRandomGuid();
   const jobName = await vscode.window.showInputBox({ prompt: "Job name" });
 
   // validator for the user-provided number of shots input

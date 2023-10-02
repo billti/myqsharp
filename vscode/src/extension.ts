@@ -26,6 +26,7 @@ import { initAzureWorkspaces } from "./azure/commands.js";
 import { initCodegen } from "./qirGeneration.js";
 import { activateTargetProfileStatusBarItem } from "./statusbar.js";
 import { createSignatureHelpProvider } from "./signature.js";
+import { activateChatAgent } from "./chatDemo.js";
 
 export async function activate(context: vscode.ExtensionContext) {
   initializeLogger();
@@ -52,6 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
   initAzureWorkspaces(context);
   initCodegen(context);
   activateDebugger(context);
+  activateChatAgent(context);
 
   log.info("Q# extension activated.");
 }

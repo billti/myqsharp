@@ -20,6 +20,12 @@
     "onDebugResolve:qsharp",
     "onDebugDynamicConfigurations:qsharp"
   ],
+  "enabledApiProposals": [
+    "chatSlashCommands",
+    "chatAgents",
+    "chatRequestAccess",
+    "interactive"
+  ],
   "contributes": {
     "configuration": {
       "title": "Q#",
