@@ -19,10 +19,12 @@ import {
 export const scopes = {
   armMgmt: "https://management.azure.com/user_impersonation",
   quantum: "https://quantum.microsoft.com/user_impersonation",
-  chatApi: "https://api.quantum.microsoft.com/Chat.ReadWrite"
+  chatApi: "https://api.quantum.microsoft.com/Chat.ReadWrite",
 };
 
-export async function getAuthSession(scopes: string[]): Promise<vscode.AuthenticationSession> {
+export async function getAuthSession(
+  scopes: string[]
+): Promise<vscode.AuthenticationSession> {
   log.debug("About to getSession for scopes", scopes.join(","));
   try {
     let session = await vscode.authentication.getSession("microsoft", scopes, {
@@ -48,7 +50,8 @@ export function getRandomGuid(): string {
 
   // Convert the 16 bytes into 32 hex digits
   const hex = bytes.reduce(
-    (acc, byte) => acc + byte.toString(16).padStart(2, "0"), ""
+    (acc, byte) => acc + byte.toString(16).padStart(2, "0"),
+    ""
   );
 
   return (
@@ -116,7 +119,10 @@ export async function queryWorkspaces(): Promise<
   const matchesTenant = tenantAuth.account.id.startsWith(tenantId);
   const accountType = (tenantAuth as any).account?.type || "";
   if (accountType !== "aad" || !matchesTenant) {
-    tenantAuth = await getAuthSession([scopes.armMgmt, `VSCODE_TENANT:${tenantId}`]);
+    tenantAuth = await getAuthSession([
+      scopes.armMgmt,
+      `VSCODE_TENANT:${tenantId}`,
+    ]);
     if (!tenantAuth) {
       // The user may have cancelled the login
       log.debug("No AAD authentication session returned during 2nd auth");
@@ -216,7 +222,10 @@ export async function queryWorkspaces(): Promise<
 }
 
 export async function getTokenForWorkspace(workspace: WorkspaceConnection) {
-  const workspaceAuth = await getAuthSession([scopes.quantum, `VSCODE_TENANT:${workspace.tenantId}`]);
+  const workspaceAuth = await getAuthSession([
+    scopes.quantum,
+    `VSCODE_TENANT:${workspace.tenantId}`,
+  ]);
   return workspaceAuth.accessToken;
 }
 
