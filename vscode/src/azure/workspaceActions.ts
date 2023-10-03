@@ -44,21 +44,23 @@ export async function getAuthSession(scopes: string[]): Promise<vscode.Authentic
 
 // Guid format such as "00000000-1111-2222-3333-444444444444"
 export function getRandomGuid(): string {
-  const id = crypto.getRandomValues(new Uint8Array(16));
-  const idChars = Array.from(id)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+
+  // Convert the 16 bytes into 32 hex digits
+  const hex = bytes.reduce(
+    (acc, byte) => acc + byte.toString(16).padStart(2, "0"), ""
+  );
 
   return (
-    idChars.substring(0, 8) +
+    hex.substring(0, 8) +
     "-" +
-    idChars.substring(8, 12) +
+    hex.substring(8, 12) +
     "-" +
-    idChars.substring(12, 16) +
+    hex.substring(12, 16) +
     "-" +
-    idChars.substring(16, 20) +
+    hex.substring(16, 20) +
     "-" +
-    idChars.substring(20, 32)
+    hex.substring(20, 32)
   );
 }
 
