@@ -27,6 +27,7 @@ import { initCodegen } from "./qirGeneration.js";
 import { activateTargetProfileStatusBarItem } from "./statusbar.js";
 import { createSignatureHelpProvider } from "./signature.js";
 import { activateChatAgent } from "./chatDemo.js";
+import { createRenameProvider } from "./rename.js";
 
 export async function activate(context: vscode.ExtensionContext) {
   initializeLogger();
@@ -179,6 +180,14 @@ async function activateLanguageService(extensionUri: vscode.Uri) {
       createSignatureHelpProvider(languageService),
       "(",
       ","
+    )
+  );
+
+  // rename symbol
+  subscriptions.push(
+    vscode.languages.registerRenameProvider(
+      qsharpDocumentFilter,
+      createRenameProvider(languageService)
     )
   );
 

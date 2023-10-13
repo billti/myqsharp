@@ -89,8 +89,7 @@ impl Eq for NodeId {}
 
 impl PartialOrd for NodeId {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        assert!(!self.is_default(), "default node ID should be replaced");
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 
@@ -232,6 +231,8 @@ impl Display for Res {
 pub struct Package {
     /// The items in the package.
     pub items: IndexMap<LocalItemId, Item>,
+    /// The top-level statements in the package.
+    pub stmts: Vec<Stmt>,
     /// The entry expression for an executable package.
     pub entry: Option<Expr>,
 }
@@ -246,6 +247,9 @@ impl Display for Package {
         }
         for item in self.items.values() {
             write!(indent, "\n{item}")?;
+        }
+        for stmt in &self.stmts {
+            write!(indent, "\n{stmt}")?;
         }
         Ok(())
     }
