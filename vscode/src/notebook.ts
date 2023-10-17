@@ -4,6 +4,9 @@
 import * as vscode from "vscode";
 import { qsharpLanguageId } from "./common.js";
 import { EventType, sendTelemetryEvent } from "./telemetry.js";
+import { WorkspaceTreeProvider } from "./azure/treeView.js";
+import { getPythonCodeForWorkspace } from "./azure/workspaceActions.js";
+import { notebookTemplate } from "./notebookTemplate.js";
 
 /**
  * Sets up handlers to detect Q# code cells in Jupyter notebooks and set the language to Q#.
@@ -64,6 +67,8 @@ export function registerQSharpNotebookHandlers() {
   return subscriptions;
 }
 
+// Yes, this function is long, but mostly to deal with multi-folder VS Code workspace or multi
+// Azure Quantum workspace connection scenarios. The actual notebook creation is pretty simple.
 export function registerCreateNotebookCommand(
   context: vscode.ExtensionContext
 ) {
@@ -71,61 +76,59 @@ export function registerCreateNotebookCommand(
     vscode.commands.registerCommand(
       "qsharp-vscode.createNotebook",
       async () => {
-        if (!vscode.workspace.workspaceFolders) {
-          vscode.window.showErrorMessage(
-            "You must have an open folder to create a notebook."
-          );
-          return;
-        }
-        const notebookName = await vscode.window.showInputBox({
-          prompt: "Enter a name for the new notebook",
-        });
-        if (!notebookName) return;
-
-        let workspaceFolder = vscode.workspace.workspaceFolders[0];
-
-        // Handle multi-workspace scenarios
-        if (vscode.workspace.workspaceFolders.length > 1) {
-          // Show a quickpick for the workspace to use
-          const choice = await vscode.window.showQuickPick(
-            vscode.workspace.workspaceFolders.map((folder) => ({
-              label: folder.name,
-              workspace: folder,
-            })),
-            {
-              title: "Select a workspace to create the notebook in",
-            }
-          );
-          if (!choice) {
-            // User cancelled
-            return;
+        // Update the workspace connection info in the notebook if workspaces are already connected to
+        const tree = WorkspaceTreeProvider.instance;
+        let choice: string | undefined = undefined;
+        if (tree) {
+          const workspaces = tree.getWorkspaceIds();
+          // Default to the first (and maybe only) workspace, else prompt the user to select one
+          choice = workspaces[0] || undefined;
+          if (workspaces.length > 1) {
+            choice = (
+              await vscode.window.showQuickPick(
+                workspaces.map((workspace) => ({
+                  label: tree.getWorkspace(workspace)?.name || workspace,
+                  id: workspace,
+                })),
+                {
+                  title: "Select a workspace to use in the notebook",
+                }
+              )
+            )?.id;
           }
-          workspaceFolder = choice.workspace;
         }
 
-        // Create the notebook full uri
-        const notebookUri = vscode.Uri.joinPath(
-          workspaceFolder.uri,
-          notebookName + ".ipynb"
-        );
+        function getCodeForWorkspace(choice: string | undefined) {
+          if (choice) {
+            const workspace =
+              WorkspaceTreeProvider.instance?.getWorkspace(choice);
+            if (workspace) {
+              return getPythonCodeForWorkspace(
+                workspace.id,
+                workspace.endpointUri,
+                workspace.name
+              );
+            }
+          }
+          // Else use dummy values
+          return getPythonCodeForWorkspace("", "", "");
+        }
 
-        // Construct a Uint8Array containing 'Hello, world'
-        const templatePath = vscode.Uri.joinPath(
-          context.extensionUri,
-          "resources",
-          "notebookTemplate.ipynb"
-        );
-        const template = await vscode.workspace.fs.readFile(templatePath);
-        let content = new TextDecoder().decode(template);
+        // Simplest way to replace the connection is just to stringify and then convert back
+        let content = JSON.stringify(notebookTemplate);
         content = content.replace(
-          "{{WORKSPACE}}",
-          "TODO: Put workspace details here"
+          `"# WORKSPACE_CONNECTION_CODE"`,
+          JSON.stringify(
+            "# Connect to the Azure Quantum workspace\n\n" +
+              getCodeForWorkspace(choice)
+          )
         );
 
-        vscode.workspace.fs.writeFile(
-          notebookUri,
-          new TextEncoder().encode(content)
+        const document = await vscode.workspace.openNotebookDocument(
+          "jupyter-notebook",
+          JSON.parse(content)
         );
+        await vscode.window.showNotebookDocument(document);
       }
     )
   );
