@@ -9,7 +9,7 @@ import {
 } from "./azure/workspaceActions";
 import { log } from "qsharp-lang";
 
-const chatUrl = "https://api.quantum.microsoft.com/api/chat/completions";
+const chatUrl = "https://canary.api.quantum.microsoft.com/api/chat/completions";
 const chatApp = "652066ed-7ea8-4625-a1e9-5bac6600bf06";
 
 const useService = true;
@@ -19,10 +19,15 @@ const chatAgentCommand: vscode.ChatAgentCommand = {
   description: "Create an Azure Quantum Jupyter Notebook",
 };
 
+const sampleCommand: vscode.ChatAgentCommand = {
+  name: "samples",
+  description: "Show Q# samples",
+};
+
 const chatAgentMetadata: vscode.ChatAgentMetadata = {
   fullName: "Azure Quantum",
   description: "Azure Quantum Copilot",
-  subCommands: [chatAgentCommand],
+  subCommands: [sampleCommand, chatAgentCommand],
 };
 
 const cannedResponse = {
@@ -49,7 +54,8 @@ type QuantumChatResponse = {
 
 async function chatRequest(
   token: string,
-  question: string
+  question: string,
+  context?: string
 ): Promise<QuantumChatResponse> {
   const payload: quantumChatRequest = {
     conversationId: getRandomGuid(),
@@ -63,6 +69,13 @@ async function chatRequest(
       qcomEnvironment: "Desktop",
     },
   };
+
+  if (context) {
+    payload.messages.unshift({
+      role: "assistant",
+      content: context,
+    });
+  }
 
   const options = {
     method: "POST",
@@ -105,10 +118,30 @@ const chatAgent: vscode.ChatAgent = async (
       `VSCODE_CLIENT_ID:${chatApp}`,
     ]);
     if (!msaChatSession) throw Error("Failed to get MSA chat token");
-    const response = await chatRequest(
-      msaChatSession.accessToken,
-      prompt.content
-    );
+
+    let response: QuantumChatResponse;
+    if (prompt.content.startsWith("/" + sampleCommand.name)) {
+      // If there is a sample name after, request that.
+
+      // Regular expression to remove "/samples" from the start of a string
+      const sampleName = /^\/samples\s+(.+)/.exec(prompt.content)?.[1];
+      if (sampleName) {
+        response = await chatRequest(
+          msaChatSession.accessToken,
+          "Please show me the Q# code for " + sampleName
+        );
+      } else {
+        response = await chatRequest(
+          msaChatSession.accessToken,
+          "Can you list the names of the quantum samples you could write if asked?",
+          "The main samples I know how to write are Bell state, Grovers, QRNG, hidden shift, Bernstein-Vazarani, Deutsch-Jozsa, superdense coding, and teleportation"
+        );
+      }
+      progress.report({ message: new vscode.MarkdownString(response.content) });
+      return Promise.resolve({}); // TODO
+    } else {
+      response = await chatRequest(msaChatSession.accessToken, prompt.content);
+    }
     if (token.isCancellationRequested) return;
 
     // No streaming reponse, so just return the whole thing in one progress update.
